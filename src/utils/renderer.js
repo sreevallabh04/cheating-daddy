@@ -1,5 +1,6 @@
 // renderer.js
-const { ipcRenderer } = require('electron');
+// Use the exposed electronAPI instead of direct require
+const ipcRenderer = window.electronAPI;
 
 let mediaStream = null;
 let screenshotInterval = null;
@@ -115,7 +116,12 @@ setInterval(() => {
 }, 2000);
 
 function cheddarElement() {
-    return document.getElementById('cheddar');
+    const element = document.getElementById('cheddar');
+    if (element && element.shadowRoot) {
+        // Return the component instance if it's a custom element
+        return element;
+    }
+    return element;
 }
 
 function convertFloat32ToInt16(float32Array) {
@@ -139,29 +145,49 @@ function arrayBufferToBase64(buffer) {
 }
 
 async function initializeGemini(profile = 'interview', language = 'en-US') {
+    console.log('initializeGemini called with profile:', profile, 'language:', language);
+    
     const apiKey = localStorage.getItem('apiKey')?.trim();
+    console.log('API Key from localStorage:', apiKey ? 'Present' : 'Missing');
+    
     if (apiKey) {
-        const success = await ipcRenderer.invoke('initialize-gemini', apiKey, localStorage.getItem('customPrompt') || '', profile, language);
-        if (success) {
-            cheddar.e().setStatus('Live');
-        } else {
+        console.log('Calling electronAPI.invoke for initialize-gemini');
+        try {
+            const success = await window.electronAPI.invoke('initialize-gemini', apiKey, localStorage.getItem('customPrompt') || '', profile, language);
+            console.log('initialize-gemini result:', success);
+            if (success) {
+                console.log('Setting status to Live');
+                cheddar.e().setStatus('Live');
+            } else {
+                console.log('Setting status to error');
+                cheddar.e().setStatus('error');
+            }
+        } catch (error) {
+            console.error('Error in initializeGemini:', error);
             cheddar.e().setStatus('error');
         }
+    } else {
+        console.log('No API key found');
+        cheddar.e().setStatus('error');
     }
 }
 
 // Listen for status updates
-ipcRenderer.on('update-status', (event, status) => {
-    console.log('Status update:', status);
-    cheddar.e().setStatus(status);
-});
+if (window.electronAPI) {
+    window.electronAPI.on('update-status', (status) => {
+        console.log('Status update:', status);
+        cheddar.e().setStatus(status);
+    });
+}
 
 // Listen for responses - REMOVED: This is handled in CheatingDaddyApp.js to avoid duplicates
-// ipcRenderer.on('update-response', (event, response) => {
-//     console.log('Gemini response:', response);
-//     cheddar.e().setResponse(response);
-//     // You can add UI elements to display the response if needed
-// });
+// if (window.electronAPI) {
+//     window.electronAPI.on('update-response', (response) => {
+//         console.log('Gemini response:', response);
+//         cheddar.e().setResponse(response);
+//         // You can add UI elements to display the response if needed
+//     });
+// }
 
 async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'medium') {
     // Store the image quality for manual screenshots
@@ -177,7 +203,7 @@ async function startCapture(screenshotIntervalSeconds = 5, imageQuality = 'mediu
             console.log('Starting macOS capture with SystemAudioDump...');
 
             // Start macOS audio capture
-            const audioResult = await ipcRenderer.invoke('start-macos-audio');
+            const audioResult = await window.electronAPI.invoke('start-macos-audio');
             if (!audioResult.success) {
                 throw new Error('Failed to start macOS audio capture: ' + audioResult.error);
             }
@@ -293,7 +319,7 @@ function setupLinuxMicProcessing(micStream) {
             const pcmData16 = convertFloat32ToInt16(chunk);
             const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-            await ipcRenderer.invoke('send-audio-content', {
+            await window.electronAPI.invoke('send-audio-content', {
                 data: base64Data,
                 mimeType: 'audio/pcm;rate=24000',
             });
@@ -326,7 +352,7 @@ function setupWindowsLoopbackProcessing() {
             const pcmData16 = convertFloat32ToInt16(chunk);
             const base64Data = arrayBufferToBase64(pcmData16.buffer);
 
-            await ipcRenderer.invoke('send-audio-content', {
+            await window.electronAPI.invoke('send-audio-content', {
                 data: base64Data,
                 mimeType: 'audio/pcm;rate=24000',
             });
@@ -418,7 +444,7 @@ async function captureScreenshot(imageQuality = 'medium', isManual = false) {
                     return;
                 }
 
-                const result = await ipcRenderer.invoke('send-image-content', {
+                const result = await window.electronAPI.invoke('send-image-content', {
                     data: base64data,
                 });
 
@@ -476,7 +502,7 @@ function stopCapture() {
 
     // Stop macOS audio capture if running
     if (isMacOS) {
-        ipcRenderer.invoke('stop-macos-audio').catch(err => {
+        window.electronAPI.invoke('stop-macos-audio').catch(err => {
             console.error('Error stopping macOS audio:', err);
         });
     }
@@ -499,7 +525,7 @@ async function sendTextMessage(text) {
     }
 
     try {
-        const result = await ipcRenderer.invoke('send-text-message', text);
+        const result = await window.electronAPI.invoke('send-text-message', text);
         if (result.success) {
             console.log('Text message sent successfully');
         } else {
@@ -595,14 +621,16 @@ async function getAllConversationSessions() {
 }
 
 // Listen for conversation data from main process
-ipcRenderer.on('save-conversation-turn', async (event, data) => {
-    try {
-        await saveConversationSession(data.sessionId, data.fullHistory);
-        console.log('Conversation session saved:', data.sessionId);
-    } catch (error) {
-        console.error('Error saving conversation session:', error);
-    }
-});
+if (window.electronAPI) {
+    window.electronAPI.on('save-conversation-turn', async (data) => {
+        try {
+            await saveConversationSession(data.sessionId, data.fullHistory);
+            console.log('Conversation session saved:', data.sessionId);
+        } catch (error) {
+            console.error('Error saving conversation session:', error);
+        }
+    });
+}
 
 // Initialize conversation storage when renderer loads
 initConversationStorage().catch(console.error);
@@ -665,3 +693,5 @@ window.cheddar = {
     isMacOS: isMacOS,
     e: cheddarElement,
 };
+
+console.log('window.cheddar object initialized with functions:', Object.keys(window.cheddar));

@@ -9,7 +9,13 @@
         "package": "electron-forge package",
         "make": "electron-forge make",
         "publish": "electron-forge publish",
-        "lint": "echo \"No linting configured\""
+        "lint": "echo \"No linting configured\"",
+        "build": "npm run package",
+        "build:win": "npm run make -- --platform win32",
+        "build:mac": "npm run make -- --platform darwin",
+        "build:linux": "npm run make -- --platform linux",
+        "dist": "npm run make",
+        "clean": "rm -rf out dist node_modules package-lock.json && npm install"
     },
     "keywords": [
         "cheating daddy",
@@ -37,6 +43,6 @@
         "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
         "@electron-forge/plugin-fuses": "^7.8.1",
         "@electron/fuses": "^1.8.0",
-        "electron": "30.0.0"
+        "electron": "^30.5.1"
     }
 }

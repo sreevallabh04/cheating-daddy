@@ -83,6 +83,9 @@ export class MainView extends LitElement {
             display: flex;
             align-items: center;
             gap: 6px;
+            cursor: pointer;
+            position: relative;
+            z-index: 1000;
         }
 
         .start-button:hover {
@@ -153,6 +156,7 @@ export class MainView extends LitElement {
 
     constructor() {
         super();
+        console.log('MainView: Constructor called');
         this.onStart = () => {};
         this.onAPIKeyHelp = () => {};
         this.isInitializing = false;
@@ -163,12 +167,33 @@ export class MainView extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        window.electron?.ipcRenderer?.on('session-initializing', (event, isInitializing) => {
-            this.isInitializing = isInitializing;
-        });
+        console.log('MainView: connectedCallback called');
+        console.log('MainView: window.electronAPI available =', !!window.electronAPI);
+        
+        if (window.electronAPI) {
+            window.electronAPI.on('session-initializing', (isInitializing) => {
+                console.log('MainView: session-initializing event received:', isInitializing);
+                this.isInitializing = isInitializing;
+            });
+        }
 
         // Add keyboard event listener for Ctrl+Enter (or Cmd+Enter on Mac)
         document.addEventListener('keydown', this.boundKeydownHandler);
+
+        // Add a regular event listener for the start button as backup
+        setTimeout(() => {
+            const startButton = this.shadowRoot?.querySelector('.start-button');
+            if (startButton) {
+                console.log('MainView: Adding backup event listener to start button');
+                startButton.addEventListener('click', (e) => {
+                    console.log('MainView: Backup event listener triggered');
+                    e.preventDefault();
+                    this.handleStartClick();
+                });
+            } else {
+                console.error('MainView: Start button not found for backup listener');
+            }
+        }, 1000);
 
         // Load and apply layout mode on startup
         this.loadLayoutMode();
@@ -178,7 +203,9 @@ export class MainView extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        window.electron?.ipcRenderer?.removeAllListeners('session-initializing');
+        if (window.electronAPI) {
+            window.electronAPI.removeAllListeners('session-initializing');
+        }
         // Remove keyboard event listener
         document.removeEventListener('keydown', this.boundKeydownHandler);
     }
@@ -202,10 +229,27 @@ export class MainView extends LitElement {
     }
 
     handleStartClick() {
+        console.log('MainView: handleStartClick called');
+        console.log('MainView: isInitializing =', this.isInitializing);
+        console.log('MainView: onStart function =', this.onStart);
+        
+        // Simple test - just log and return for now
+        console.log('MainView: Button click detected!');
+        
+        // Add a simple alert to verify the click is working
+        alert('Start button clicked! Check console for details.');
+        
         if (this.isInitializing) {
+            console.log('MainView: Skipping start - already initializing');
             return;
         }
-        this.onStart();
+        
+        console.log('MainView: Calling onStart function');
+        if (typeof this.onStart === 'function') {
+            this.onStart();
+        } else {
+            console.error('MainView: onStart is not a function:', this.onStart);
+        }
     }
 
     handleAPIKeyHelpClick() {
@@ -282,6 +326,13 @@ export class MainView extends LitElement {
     }
 
     render() {
+        console.log('MainView: render called');
+        console.log('MainView: onStart function in render =', this.onStart);
+        
+        // Check if the button would be rendered
+        const buttonText = this.getStartButtonText();
+        console.log('MainView: Button text =', buttonText);
+        
         return html`
             <div class="welcome">Welcome</div>
 
@@ -293,7 +344,12 @@ export class MainView extends LitElement {
                     @input=${this.handleInput}
                     class="${this.showApiKeyError ? 'api-key-error' : ''}"
                 />
-                <button @click=${this.handleStartClick} class="start-button ${this.isInitializing ? 'initializing' : ''}">
+                <button 
+                    @click=${this.handleStartClick} 
+                    class="start-button ${this.isInitializing ? 'initializing' : ''}"
+                    id="start-session-button"
+                    title="Start Session"
+                >
                     ${this.getStartButtonText()}
                 </button>
             </div>
@@ -301,6 +357,9 @@ export class MainView extends LitElement {
                 dont have an api key?
                 <span @click=${this.handleAPIKeyHelpClick} class="link">get one here</span>
             </p>
+            <button @click=${() => console.log('Test button clicked!')} style="margin-top: 10px; padding: 5px;">
+                Test Button (Check Console)
+            </button>
         `;
     }
 }

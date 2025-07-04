@@ -39,12 +39,13 @@ function createWindow(sendToRenderer, geminiSessionRef) {
         skipTaskbar: true,
         hiddenInMissionControl: true,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false, // TODO: change to true
+            nodeIntegration: false,
+            contextIsolation: true,
             backgroundThrottling: false,
             enableBlinkFeatures: 'GetDisplayMedia',
             webSecurity: true,
             allowRunningInsecureContent: false,
+            preload: path.join(__dirname, 'preload.js'),
         },
         backgroundColor: '#00000000',
     });

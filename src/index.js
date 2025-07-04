@@ -5,6 +5,7 @@ if (require('electron-squirrel-startup')) {
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const { createWindow, updateGlobalShortcuts } = require('./utils/window');
 const { setupGeminiIpcHandlers, stopMacOSAudioCapture, sendToRenderer } = require('./utils/gemini');
+const path = require('path');
 
 const geminiSessionRef = { current: null };
 let mainWindow = null;
@@ -78,6 +79,58 @@ function setupGeneralIpcHandlers() {
             return { success: true };
         } catch (error) {
             console.error('Error updating content protection:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('toggle-window-visibility', async event => {
+        try {
+            if (!mainWindow) {
+                console.log('Toggle window visibility: mainWindow not available');
+                return { success: false, error: 'Window not available' };
+            }
+            
+            if (mainWindow.isDestroyed()) {
+                console.log('Toggle window visibility: mainWindow is destroyed');
+                return { success: false, error: 'Window is destroyed' };
+            }
+            
+            if (mainWindow.isVisible()) {
+                console.log('Toggle window visibility: hiding window');
+                mainWindow.hide();
+            } else {
+                console.log('Toggle window visibility: showing window');
+                mainWindow.showInactive();
+            }
+            return { success: true };
+        } catch (error) {
+            console.error('Error toggling window visibility:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('close-session', async event => {
+        try {
+            if (geminiSessionRef.current) {
+                await geminiSessionRef.current.stop();
+                geminiSessionRef.current = null;
+            }
+            return { success: true };
+        } catch (error) {
+            console.error('Error closing session:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    ipcMain.handle('window-minimize', async event => {
+        try {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.minimize();
+                return { success: true };
+            }
+            return { success: false, error: 'Window not available' };
+        } catch (error) {
+            console.error('Error minimizing window:', error);
             return { success: false, error: error.message };
         }
     });

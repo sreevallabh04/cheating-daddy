@@ -146,19 +146,44 @@ export class CheatingDaddyApp extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
+        console.log('CheatingDaddyApp: connectedCallback called');
+        console.log('CheatingDaddyApp: window.cheddar available =', !!window.cheddar);
+        console.log('CheatingDaddyApp: window.electronAPI available =', !!window.electronAPI);
 
-        // Set up IPC listeners if needed
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            ipcRenderer.on('update-response', (_, response) => {
+        // Wait for window.cheddar to be available if it's not ready yet
+        if (!window.cheddar) {
+            console.log('CheatingDaddyApp: Waiting for window.cheddar to be available...');
+            const checkCheddar = () => {
+                if (window.cheddar) {
+                    console.log('CheatingDaddyApp: window.cheddar is now available');
+                    this.initializeApp();
+                } else {
+                    setTimeout(checkCheddar, 100);
+                }
+            };
+            checkCheddar();
+        } else {
+            this.initializeApp();
+        }
+    }
+
+    initializeApp() {
+        console.log('CheatingDaddyApp: initializeApp called');
+        
+        // Set up IPC listeners using the exposed electronAPI
+        if (window.electronAPI) {
+            console.log('CheatingDaddyApp: Setting up electronAPI listeners');
+            window.electronAPI.on('update-response', (response) => {
                 this.setResponse(response);
             });
-            ipcRenderer.on('update-status', (_, status) => {
+            window.electronAPI.on('update-status', (status) => {
                 this.setStatus(status);
             });
-            ipcRenderer.on('click-through-toggled', (_, isEnabled) => {
+            window.electronAPI.on('click-through-toggled', (isEnabled) => {
                 this._isClickThrough = isEnabled;
             });
+        } else {
+            console.error('CheatingDaddyApp: window.electronAPI not available');
         }
 
         // Add functions to window.cheddar for IPC callbacks
@@ -167,28 +192,35 @@ export class CheatingDaddyApp extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            ipcRenderer.removeAllListeners('update-response');
-            ipcRenderer.removeAllListeners('update-status');
-            ipcRenderer.removeAllListeners('click-through-toggled');
+        if (window.electronAPI) {
+            window.electronAPI.removeAllListeners('update-response');
+            window.electronAPI.removeAllListeners('update-status');
+            window.electronAPI.removeAllListeners('click-through-toggled');
         }
     }
 
     setupCheddarCallbacks() {
+        console.log('CheatingDaddyApp: setupCheddarCallbacks called');
         // Initialize window.cheddar if it doesn't exist
         if (!window.cheddar) {
+            console.log('CheatingDaddyApp: Creating window.cheddar object');
             window.cheddar = {};
+        } else {
+            console.log('CheatingDaddyApp: window.cheddar already exists');
         }
 
         // Add functions to get current view and layout mode
         window.cheddar.getCurrentView = () => {
+            console.log('CheatingDaddyApp: getCurrentView called, returning:', this.currentView);
             return this.currentView;
         };
 
         window.cheddar.getLayoutMode = () => {
+            console.log('CheatingDaddyApp: getLayoutMode called, returning:', this.layoutMode);
             return this.layoutMode;
         };
+        
+        console.log('CheatingDaddyApp: Cheddar callbacks setup complete');
     }
 
     setStatus(text) {
@@ -236,57 +268,81 @@ export class CheatingDaddyApp extends LitElement {
             }
 
             // Close the session
-            if (window.require) {
-                const { ipcRenderer } = window.require('electron');
-                await ipcRenderer.invoke('close-session');
+            if (window.electronAPI) {
+                await window.electronAPI.invoke('close-session');
             }
             this.sessionActive = false;
             this.currentView = 'main';
             console.log('Session closed');
         } else {
             // Quit the entire application
-            if (window.require) {
-                const { ipcRenderer } = window.require('electron');
-                await ipcRenderer.invoke('quit-application');
+            if (window.electronAPI) {
+                await window.electronAPI.invoke('quit-application');
             }
         }
     }
 
     async handleHideToggle() {
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            await ipcRenderer.invoke('toggle-window-visibility');
+        if (window.electronAPI) {
+            await window.electronAPI.invoke('toggle-window-visibility');
         }
     }
 
     // Main view event handlers
     async handleStart() {
+        console.log('CheatingDaddyApp: handleStart called');
+        console.log('CheatingDaddyApp: window.cheddar available =', !!window.cheddar);
+        console.log('CheatingDaddyApp: window.electronAPI available =', !!window.electronAPI);
+        
         // check if api key is empty do nothing
         const apiKey = localStorage.getItem('apiKey')?.trim();
+        console.log('CheatingDaddyApp: API Key:', apiKey ? 'Present' : 'Missing');
+        
         if (!apiKey || apiKey === '') {
+            console.log('CheatingDaddyApp: API key is empty, triggering error animation');
             // Trigger the red blink animation on the API key input
             const mainView = this.shadowRoot.querySelector('main-view');
+            console.log('CheatingDaddyApp: mainView element found =', !!mainView);
             if (mainView && mainView.triggerApiKeyError) {
                 mainView.triggerApiKeyError();
             }
             return;
         }
 
+        console.log('CheatingDaddyApp: Initializing Gemini with profile:', this.selectedProfile, 'language:', this.selectedLanguage);
+        
         if (window.cheddar) {
-            await window.cheddar.initializeGemini(this.selectedProfile, this.selectedLanguage);
-            // Pass the screenshot interval as string (including 'manual' option)
-            window.cheddar.startCapture(this.selectedScreenshotInterval, this.selectedImageQuality);
+            console.log('CheatingDaddyApp: window.cheddar is available');
+            try {
+                console.log('CheatingDaddyApp: Calling window.cheddar.initializeGemini');
+                await window.cheddar.initializeGemini(this.selectedProfile, this.selectedLanguage);
+                console.log('CheatingDaddyApp: Gemini initialized successfully');
+                
+                // Pass the screenshot interval as string (including 'manual' option)
+                console.log('CheatingDaddyApp: Calling window.cheddar.startCapture');
+                window.cheddar.startCapture(this.selectedScreenshotInterval, this.selectedImageQuality);
+                console.log('CheatingDaddyApp: Capture started');
+            } catch (error) {
+                console.error('CheatingDaddyApp: Error in handleStart:', error);
+                this.setStatus('Error: ' + error.message);
+                return;
+            }
+        } else {
+            console.error('CheatingDaddyApp: window.cheddar is not available');
+            this.setStatus('Error: Cheddar not available');
+            return;
         }
+        
         this.responses = [];
         this.currentResponseIndex = -1;
         this.startTime = Date.now();
         this.currentView = 'assistant';
+        console.log('CheatingDaddyApp: Session started successfully');
     }
 
     async handleAPIKeyHelp() {
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            await ipcRenderer.invoke('open-external', 'https://cheatingdaddy.com/help/api-key');
+        if (window.electronAPI) {
+            await window.electronAPI.invoke('open-external', 'https://cheatingdaddy.com/help/api-key');
         }
     }
 
@@ -320,9 +376,8 @@ export class CheatingDaddyApp extends LitElement {
 
     // Help view event handlers
     async handleExternalLinkClick(url) {
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            await ipcRenderer.invoke('open-external', url);
+        if (window.electronAPI) {
+            await window.electronAPI.invoke('open-external', url);
         }
     }
 
@@ -353,9 +408,8 @@ export class CheatingDaddyApp extends LitElement {
         super.updated(changedProperties);
 
         // Only notify main process of view change if the view actually changed
-        if (changedProperties.has('currentView') && window.require) {
-            const { ipcRenderer } = window.require('electron');
-            ipcRenderer.send('view-changed', this.currentView);
+        if (changedProperties.has('currentView') && window.electronAPI) {
+            window.electronAPI.send('view-changed', this.currentView);
 
             // Add a small delay to smooth out the transition
             const viewContainer = this.shadowRoot?.querySelector('.view-container');
@@ -495,10 +549,9 @@ export class CheatingDaddyApp extends LitElement {
         this.updateLayoutMode();
 
         // Notify main process about layout change for window resizing
-        if (window.require) {
+        if (window.electronAPI) {
             try {
-                const { ipcRenderer } = window.require('electron');
-                await ipcRenderer.invoke('update-sizes');
+                await window.electronAPI.invoke('update-sizes');
             } catch (error) {
                 console.error('Failed to update sizes in main process:', error);
             }
